@@ -27,17 +27,7 @@ func Site(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	m, err := benchmark.GetManager()
-	if err != nil || m == nil {
-		if err == nil {
-			err = errors.New("unexpected error")
-		}
-		w.WriteHeader(http.StatusInternalServerError)
-		_, _ = fmt.Fprintf(w, "Get bencmark manager failed: %s", err.Error())
-		return
-	}
-
-	test := m.GetTest(benchmark.BenchOverload).(benchmark.OverloadTest)
+	test := benchmark.GetManager().GetTest(benchmark.BenchOverload).(benchmark.OverloadTest)
 
 	result, err := test.Benchmark(sites)
 	if err != nil || result == nil {

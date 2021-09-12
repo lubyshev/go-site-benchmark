@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-func GetHttpConnection(ip string) (net.Conn, error) {
+func getHttpConnection(ip string) (net.Conn, error) {
 	d := net.Dialer{
 		Timeout:  3 * time.Second,
 		Deadline: time.Now().Add(time.Second * 5),

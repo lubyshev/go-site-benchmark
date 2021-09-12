@@ -2,18 +2,12 @@ package benchmark
 
 const BenchOverload = "overload"
 
-type Manager struct {
-
-}
+type Manager struct{}
 
 var manager *Manager
 
-func GetManager() (*Manager, error) {
-	if manager == nil {
-		manager = new(Manager)
-	}
-
-	return manager, nil
+func GetManager() *Manager {
+	return manager
 }
 
 func (m *Manager) GetTest(name string) interface{} {

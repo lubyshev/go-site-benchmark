@@ -2,7 +2,6 @@ package benchmark
 
 import (
 	"log"
-	"lubyshev/go-site-benchmark/src/conf"
 	"lubyshev/go-site-benchmark/src/sockets"
 	"lubyshev/go-site-benchmark/src/yandex"
 	"net"
@@ -25,21 +24,11 @@ func (otr *OverloadTestResult) set(host string, count int) {
 	otr.Items[host] = count
 }
 
-type overload struct {
-	config *conf.AppConfig
-}
+type overload struct{}
 
 var overloadManager overload
 
-func (o *overload) init() {
-	o.config = conf.GetConfig()
-}
-
 func (o overload) Benchmark(sites *yandex.ResponseStruct) (*OverloadTestResult, error) {
-	if o.config == nil {
-		o.init()
-	}
-
 	result := new(OverloadTestResult)
 	result.Items = make(map[string]int)
 
@@ -51,17 +40,15 @@ func (o overload) Benchmark(sites *yandex.ResponseStruct) (*OverloadTestResult, 
 			go o.testSite(item.Host, item.Url, result, &wg)
 		}
 	}
-
 	wg.Wait()
 
 	return result, nil
 }
 
 func (o *overload) testSite(host string, url string, result *OverloadTestResult, wg *sync.WaitGroup) {
-	var conns []net.Conn
-
+	var cons []net.Conn
 	defer func() {
-		for _, conn := range conns {
+		for _, conn := range cons {
 			_ = conn.Close()
 		}
 		log.Printf("finish %s connection\n", host)
@@ -78,24 +65,16 @@ func (o *overload) testSite(host string, url string, result *OverloadTestResult,
 
 	tm := time.Now()
 	for {
-		var (
-			conn net.Conn
-			err  error
-		)
 		if time.Since(tm) > 20*time.Second {
 			break
 		}
-		if isSecure {
-			conn, err = sockets.GetHttpsConnection(ip)
-		} else {
-			conn, err = sockets.GetHttpConnection(ip)
-		}
+		conn, err := sockets.GetSocketsManager().GetHttpConnection(ip, isSecure)
 		if err != nil {
+			log.Printf("ERROR %s: connection error: %s\n", host, err.Error())
 			break
 		}
-		conns = append(conns, conn)
+		cons = append(cons, conn)
 	}
-	count := len(conns)
 
-	result.set(host, count)
+	result.set(host, len(cons))
 }

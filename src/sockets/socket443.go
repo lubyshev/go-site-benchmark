@@ -24,7 +24,7 @@ func loadCertificate() {
 	log.Println("CLIENT CERTIFICATE loaded")
 }
 
-func GetHttpsConnection(ip string) (conn net.Conn, err error) {
+func getHttpsConnection(ip string) (conn net.Conn, err error) {
 	if cert == nil {
 		loadCertificate()
 	}
