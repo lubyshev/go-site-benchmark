@@ -1,10 +1,11 @@
 package benchmark
 
 import (
-	"bytes"
+	"log"
 	"lubyshev/go-site-benchmark/src/conf"
+	"lubyshev/go-site-benchmark/src/sockets"
 	"lubyshev/go-site-benchmark/src/yandex"
-	"net/http"
+	"net"
 	"sync"
 	"time"
 )
@@ -13,24 +14,15 @@ type OverloadTest interface {
 	Benchmark(sites *yandex.ResponseStruct) (*OverloadTestResult, error)
 }
 
-type OverloadSiteResult struct {
-	Host        string
-	Connections int
-}
-
 type OverloadTestResult struct {
-	Items []OverloadSiteResult
+	Items map[string]int
 	lock  sync.Mutex
 }
 
-func (otr *OverloadTestResult) push(host string, count int) {
+func (otr *OverloadTestResult) set(host string, count int) {
 	defer otr.lock.Unlock()
 	otr.lock.Lock()
-
-	otr.Items = append(otr.Items, OverloadSiteResult{
-		Host:        host,
-		Connections: count,
-	})
+	otr.Items[host] = count
 }
 
 type overload struct {
@@ -58,58 +50,60 @@ func (o overload) Benchmark(sites *yandex.ResponseStruct) (*OverloadTestResult, 
 	}
 
 	result := new(OverloadTestResult)
+	result.Items = make(map[string]int)
 
 	var wg sync.WaitGroup
 	for _, item := range sites.Items {
-		wg.Add(1)
-		go o.testSite(item.Host, item.Url, result, &wg)
+		if _, ok := result.Items[item.Host]; !ok {
+			wg.Add(1)
+			go o.testSite(item.Host, item.Url, result, &wg)
+		}
 	}
+
 	wg.Wait()
 
 	return result, nil
 }
 
 func (o *overload) testSite(host string, url string, result *OverloadTestResult, wg *sync.WaitGroup) {
-	defer wg.Done()
-	maxConnections := o.config.MaxConnections
-	tm := time.Now()
+	var conns []net.Conn
 
-	t := http.DefaultTransport.(*http.Transport).Clone()
-	t.MaxIdleConns = maxConnections*100
-	t.MaxConnsPerHost = maxConnections
-	t.MaxIdleConnsPerHost = maxConnections
-
-
-	httpClient := &http.Client{
-		Timeout:   3 * time.Second,
-		Transport: t,
-	}
-
-	var resp []*http.Response
 	defer func() {
-		for _, item := range resp {
-			_ = item.Body.Close()
+		for _, conn := range conns {
+			_ = conn.Close()
 		}
+		log.Printf("finish %s connection\n", host)
+		wg.Done()
 	}()
+	log.Printf("start %s connection\n", host)
 
-	for i := 0; i < maxConnections; i++ {
+	isSecure := url[0:5] == "https"
+	addr, err := net.LookupIP(host)
+	if err != nil {
+		return
+	}
+	ip := addr[0].String()
+
+	tm := time.Now()
+	for {
+		var (
+			conn net.Conn
+			err  error
+		)
 		if time.Since(tm) > 20*time.Second {
 			break
 		}
-		req, err := http.NewRequest(http.MethodGet, url, bytes.NewBuffer([]byte("")))
+		if isSecure {
+			conn, err = sockets.GetHttpsConnection(ip)
+		} else {
+			conn, err = sockets.GetHttpConnection(ip)
+		}
 		if err != nil {
 			break
 		}
-		response, err := httpClient.Do(req)
-		if err != nil {
-			break
-		}
-		if response.StatusCode != http.StatusOK {
-			break
-		}
-		resp = append(resp, response)
+		conns = append(conns, conn)
 	}
-	count := len(resp)
+	count := len(conns)
 
-	result.push(host, count)
+	result.set(host, count)
 }

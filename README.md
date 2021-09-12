@@ -8,6 +8,20 @@
 
 [http://localhost:8090/sites?search=](http://localhost:8090/sites?search=)
 
+Возможно не хватит лимита по открытым файлам, тогда смотри следующий раздел.
+
+## Increase open files limit (current session only)
+
+```bash
+ulimit -n 65535
+```
+
+## Generate client certificate
+
+```bash
+make gen-cert
+```
+
 ## Build docker image
 
 ```bash
@@ -18,6 +32,12 @@ make build
 
 ```bash
 make run
+```
+
+## Show docker container logs
+
+```bash
+make logs
 ```
 
 ## Stop docker container

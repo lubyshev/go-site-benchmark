@@ -49,7 +49,7 @@ func Site(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	for _, item := range result.Items {
-		_, _ = fmt.Fprintf(w, "%3d: %s\n", item.Connections, item.Host)
+	for host, count := range result.Items {
+		_, _ = fmt.Fprintf(w, "%3d: %s\n", count, host)
 	}
 }
