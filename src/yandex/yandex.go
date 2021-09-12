@@ -27,8 +27,9 @@ func GetYandexSearchResult(searchPhrase string) (res *ResponseStruct, err error)
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
-
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 	response, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err

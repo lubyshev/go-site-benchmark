@@ -2,15 +2,15 @@ package benchmark
 
 import (
 	"log"
+	"lubyshev/go-site-benchmark/src/dataProvider"
 	"lubyshev/go-site-benchmark/src/sockets"
-	"lubyshev/go-site-benchmark/src/yandex"
 	"net"
 	"sync"
 	"time"
 )
 
 type OverloadTest interface {
-	Benchmark(sites *yandex.ResponseStruct) (*OverloadTestResult, error)
+	Benchmark(sites *dataProvider.HostsToCheck) (*OverloadTestResult, error)
 }
 
 type OverloadTestResult struct {
@@ -28,16 +28,16 @@ type overload struct{}
 
 var overloadManager overload
 
-func (o overload) Benchmark(sites *yandex.ResponseStruct) (*OverloadTestResult, error) {
+func (o overload) Benchmark(sites *dataProvider.HostsToCheck) (*OverloadTestResult, error) {
 	result := new(OverloadTestResult)
 	result.Items = make(map[string]int)
 
 	var wg sync.WaitGroup
-	for _, item := range sites.Items {
-		if _, ok := result.Items[item.Host]; !ok {
-			result.Items[item.Host] = 0
+	for host, isSecure := range sites.Items {
+		if _, ok := result.Items[host]; !ok {
+			result.Items[host] = 0
 			wg.Add(1)
-			go o.testSite(item.Host, item.Url, result, &wg)
+			go o.testSite(host, isSecure, result, &wg)
 		}
 	}
 	wg.Wait()
@@ -45,7 +45,7 @@ func (o overload) Benchmark(sites *yandex.ResponseStruct) (*OverloadTestResult, 
 	return result, nil
 }
 
-func (o *overload) testSite(host string, url string, result *OverloadTestResult, wg *sync.WaitGroup) {
+func (o *overload) testSite(host string, isSecure bool, result *OverloadTestResult, wg *sync.WaitGroup) {
 	var cons []net.Conn
 	defer func() {
 		for _, conn := range cons {
@@ -56,7 +56,6 @@ func (o *overload) testSite(host string, url string, result *OverloadTestResult,
 	}()
 	log.Printf("start %s connection\n", host)
 
-	isSecure := url[0:5] == "https"
 	addr, err := net.LookupIP(host)
 	if err != nil {
 		return

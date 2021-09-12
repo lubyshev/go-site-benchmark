@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"lubyshev/go-site-benchmark/src/benchmark"
-	"lubyshev/go-site-benchmark/src/yandex"
+	"lubyshev/go-site-benchmark/src/dataProvider"
 	"net/http"
 	"strings"
 )
@@ -17,11 +17,8 @@ func Site(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	sites, err := yandex.GetYandexSearchResult(searchPhrase)
-	if err != nil || sites == nil {
-		if err == nil {
-			err = errors.New("unexpected error")
-		}
+	sites, err := dataProvider.GetAdapter(dataProvider.DataProviderYandex).GetData(searchPhrase)
+	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		_, _ = fmt.Fprintf(w, "Yandex search failed: %s", err.Error())
 		return
