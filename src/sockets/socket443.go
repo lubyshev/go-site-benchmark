@@ -14,11 +14,11 @@ var cert *tls.Certificate
 func loadCertificate() {
 	curDir, err := os.Getwd()
 	if err != nil {
-		log.Fatal(fmt.Printf("can`t get working directory: %s", err.Error()))
+		log.Fatal(fmt.Sprintf("can`t get working directory: %s", err.Error()))
 	}
 	ca, err := tls.LoadX509KeyPair(curDir+"/certs/client.pem", curDir+"/certs/client.key")
 	if err != nil {
-		log.Fatal(fmt.Printf("can`t read client certificate: %s", err.Error()))
+		log.Fatal(fmt.Sprintf("can`t read client certificate: %s", err.Error()))
 	}
 	cert = &ca
 	log.Println("CLIENT CERTIFICATE loaded")
