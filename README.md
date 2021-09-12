@@ -8,15 +8,17 @@
 
 [http://localhost:8090/sites?search=](http://localhost:8090/sites?search=)
 
-Возможно не хватит лимита по открытым файлам, тогда смотри следующий раздел.
-
 ## Increase open files limit (current session only)
+
+Возможно не хватит лимита по открытым файлам.
 
 ```bash
 ulimit -n 65535
 ```
 
 ## Generate client certificate
+
+Для работы по протоколу HTTPS необходимо сгенерировать клиентский сертификат.
 
 ```bash
 make gen-cert

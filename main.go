@@ -13,7 +13,7 @@ func sites(w http.ResponseWriter, req *http.Request) {
 }
 
 func main() {
-	config, _ := conf.GetConfig()
+	config := conf.GetConfig()
 	log.Printf("Listen on http://localhost:%d", config.ServerPort)
 	log.Printf("With config: %+v\n", *config)
 

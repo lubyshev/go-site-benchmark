@@ -1,57 +1,49 @@
 package conf
 
 import (
-	"errors"
 	"fmt"
 	"github.com/joho/godotenv"
 	_ "github.com/joho/godotenv/autoload"
+	"log"
 	"os"
 	"strconv"
 )
 
 type AppConfig struct {
-	ServerHost string
 	ServerPort int
-
-	MaxConnections int
 }
 
 var config *AppConfig
 
-func GetConfig() (*AppConfig, error) {
+func GetConfig() *AppConfig {
 	if config == nil {
-		err := loadConfig()
-		if err != nil {
-			return nil, err
-		}
+		loadConfig()
 	}
-	return config, nil
+	return config
 }
 
-func loadConfig() (err error) {
+func loadConfig() {
 	config = new(AppConfig)
 
 	rootPath, err := os.Getwd()
 	if err != nil {
-		return err
+		log.Fatal(fmt.Sprintf("can`t get working directory: %s", err.Error()))
 	}
 	fileName := fmt.Sprintf("%s/etc/.env", rootPath)
 
 	if _, err = os.Stat(fileName); os.IsNotExist(err) {
-		return errors.New(fmt.Sprintf("config file does not exist: %s", fileName))
+		log.Fatal(fmt.Sprintf("config file does not exist: %s", fileName))
 	}
 
 	myEnv, err := godotenv.Read(fileName)
 	if err != nil {
-		return errors.New(fmt.Sprintf("error while read config file: %s", fileName))
+		log.Fatal(fmt.Sprintf("error while read config file: %s", fileName))
 	}
 
 	err = processEnv(myEnv)
 	if err != nil {
-		return err
+		log.Fatal(fmt.Sprintf("error while processing config file: %s", err.Error()))
 	}
-
-	return nil
 }
 
 func processEnv(env map[string]string) error {
@@ -60,17 +52,6 @@ func processEnv(env map[string]string) error {
 		return err
 	}
 	config.ServerPort = port
-
-	conns, err := strconv.Atoi(env["APP_MAX_CONNECTIONS"])
-	if err != nil {
-		return err
-	}
-	config.MaxConnections = conns
-
-	config.ServerHost = "localhost"
-	if host, ok := env["APP_SERVER_HOST"]; ok && host != "" {
-		config.ServerHost = host
-	}
 
 	return nil
 }

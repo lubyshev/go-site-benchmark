@@ -26,27 +26,18 @@ func (otr *OverloadTestResult) set(host string, count int) {
 }
 
 type overload struct {
-	started bool
-	config  *conf.AppConfig
+	config *conf.AppConfig
 }
 
 var overloadManager overload
 
-func (o *overload) init() error {
-	config, err := conf.GetConfig()
-	if err != nil {
-		return err
-	}
-	o.config = config
-	return nil
+func (o *overload) init() {
+	o.config = conf.GetConfig()
 }
 
 func (o overload) Benchmark(sites *yandex.ResponseStruct) (*OverloadTestResult, error) {
-	if !o.started {
-		err := o.init()
-		if err != nil {
-			return nil, err
-		}
+	if o.config == nil {
+		o.init()
 	}
 
 	result := new(OverloadTestResult)
@@ -55,6 +46,7 @@ func (o overload) Benchmark(sites *yandex.ResponseStruct) (*OverloadTestResult, 
 	var wg sync.WaitGroup
 	for _, item := range sites.Items {
 		if _, ok := result.Items[item.Host]; !ok {
+			result.Items[item.Host] = 0
 			wg.Add(1)
 			go o.testSite(item.Host, item.Url, result, &wg)
 		}

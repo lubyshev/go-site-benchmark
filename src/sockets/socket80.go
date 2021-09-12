@@ -10,6 +10,7 @@ func GetHttpConnection(ip string) (net.Conn, error) {
 	d := net.Dialer{
 		Timeout:  3 * time.Second,
 		Deadline: time.Now().Add(time.Second * 5),
+		KeepAlive: time.Second * 30,
 	}
 	conn, err := d.Dial("tcp", ip+":80")
 	if err != nil {
