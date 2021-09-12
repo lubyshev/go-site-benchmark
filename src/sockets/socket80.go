@@ -1,7 +1,6 @@
 package sockets
 
 import (
-	"log"
 	"net"
 	"time"
 )
@@ -21,7 +20,6 @@ func getHttpConnection(ip string) (net.Conn, error) {
 	_, err = conn.Read(bytes)
 	if err != nil {
 		_ = conn.Close()
-		log.Println(err)
 		return nil, err
 	}
 	bytes = bytes[:0]

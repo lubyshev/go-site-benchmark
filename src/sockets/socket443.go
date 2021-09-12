@@ -49,7 +49,6 @@ func getHttpsConnection(ip string) (conn net.Conn, err error) {
 	_, err = conn.Read(bytes)
 	if err != nil {
 		_ = conn.Close()
-		log.Println(err)
 		return nil, err
 	}
 	bytes = bytes[:0]
