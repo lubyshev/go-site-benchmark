@@ -1,14 +1,15 @@
-FROM golang
-
+FROM golang as builder
 MAINTAINER Nick Lubyshev <lubyshev@gmail.com>
 
-WORKDIR /go/src/app
+WORKDIR /build
 COPY . .
+RUN CGO_ENABLED=0 GOOS=linux go build -a -o app ./main.go
 
-RUN go get -d -v ./...
-RUN go install -v ./...
-RUN go build -o app main.go
+FROM alpine
+RUN mkdir /runtime;mkdir /runtime/etc;mkdir /runtime/certs
+WORKDIR /runtime
+COPY --from=builder /build/app /runtime/app
+COPY --from=builder /build/etc /runtime/etc
+COPY --from=builder /build/certs /runtime/certs
 
-EXPOSE $APP_SERVER_PORT
-
-CMD ["go","run","./main.go"]
+ENTRYPOINT [ "/runtime/app" ]

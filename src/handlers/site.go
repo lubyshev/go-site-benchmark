@@ -3,6 +3,7 @@ package handlers
 import (
 	"errors"
 	"fmt"
+	"log"
 	"lubyshev/go-site-benchmark/src/benchmark"
 	"lubyshev/go-site-benchmark/src/dataProvider"
 	"net/http"
@@ -10,6 +11,7 @@ import (
 )
 
 func Site(w http.ResponseWriter, req *http.Request) {
+	log.Printf("START REQUEST FROM: %s\n", req.RemoteAddr)
 	searchPhrase := strings.Trim(req.FormValue("search"), " ")
 	if searchPhrase == "" {
 		w.WriteHeader(http.StatusBadRequest)
@@ -39,4 +41,5 @@ func Site(w http.ResponseWriter, req *http.Request) {
 	for host, count := range result.Items {
 		_, _ = fmt.Fprintf(w, "%3d: %s\n", count, host)
 	}
+	log.Printf("FINISH REQUEST FROM: %s\n===\n", req.RemoteAddr)
 }
