@@ -5,12 +5,22 @@ import (
 	"fmt"
 	"log"
 	"lubyshev/go-site-benchmark/src/benchmark"
+	"lubyshev/go-site-benchmark/src/conf"
 	"lubyshev/go-site-benchmark/src/dataProvider"
 	"net/http"
+	"sort"
 	"strings"
 )
 
 func Site(w http.ResponseWriter, req *http.Request) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Println("Recovered in handlers.Site()", r)
+			w.WriteHeader(http.StatusInternalServerError)
+			_, _ = fmt.Fprintf(w, "Internal error: %v", r)
+		}
+
+	}()
 	log.Printf("START REQUEST FROM: %s\n", req.RemoteAddr)
 	searchPhrase := strings.Trim(req.FormValue("search"), " ")
 	if searchPhrase == "" {
@@ -28,7 +38,7 @@ func Site(w http.ResponseWriter, req *http.Request) {
 
 	test := benchmark.GetManager().GetTest(benchmark.BenchOverload).(benchmark.OverloadTest)
 
-	result, err := test.Benchmark(sites)
+	result, err := test.Benchmark(sites, conf.GetConfig().CacheTtl)
 	if err != nil || result == nil {
 		if err == nil {
 			err = errors.New("unexpected error")
@@ -38,8 +48,18 @@ func Site(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	for host, count := range result.Items {
-		_, _ = fmt.Fprintf(w, "%3d: %s\n", count, host)
+	keys := make([]string, 0, len(result.Items))
+	for k := range result.Items {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	for _, hostName := range keys {
+		count := 0
+		for _, url := range result.Items[hostName].Urls {
+			count += url.Count
+		}
+		_, _ = fmt.Fprintf(w, "%3d: %s\n", count, hostName)
 	}
 	log.Printf("FINISH REQUEST FROM: %s\n===\n", req.RemoteAddr)
 }

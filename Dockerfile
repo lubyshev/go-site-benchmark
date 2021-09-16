@@ -1,15 +1,22 @@
 FROM golang as builder
-MAINTAINER Nick Lubyshev <lubyshev@gmail.com>
-
 WORKDIR /build
 COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build -a -o app ./main.go
 
 FROM alpine
-RUN mkdir /runtime;mkdir /runtime/etc;mkdir /runtime/certs
+MAINTAINER Nick Lubyshev <lubyshev@gmail.com>
+
+ENV APP_SERVER_PORT=8090
+ENV APP_CACHE_TTL=300
+ENV APP_OVERLOAD_QUEUE_WORKERS=16
+ENV APP_OVERLOAD_INIT_CONNECTIONS=32
+ENV APP_OVERLOAD_MAX_LIMIT=1024
+ENV APP_OVERLOAD_MAX_CONNECTIONS=4096
+
+EXPOSE $APP_SERVER_PORT
+
+RUN mkdir /runtime
 WORKDIR /runtime
 COPY --from=builder /build/app /runtime/app
-COPY --from=builder /build/etc /runtime/etc
-COPY --from=builder /build/certs /runtime/certs
 
 ENTRYPOINT [ "/runtime/app" ]

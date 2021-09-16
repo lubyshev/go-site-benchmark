@@ -8,7 +8,7 @@ type OverloadSitesToCheck interface {
 
 type HostsToCheck struct {
 	// [host]isSecure
-	Items map[string]bool
+	Items map[string][]string
 }
 
 func GetAdapter(name string) OverloadSitesToCheck {
