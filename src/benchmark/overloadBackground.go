@@ -90,7 +90,7 @@ func (q *overloadQueue) worker(
 
 var connectionCount int32
 
-func (q *overloadQueue) testUrl(i int, url *Url) {
+func (q *overloadQueue) testUrl(_ int, url *Url) {
 	if url.state != stateUrlInProgress {
 		return
 	}

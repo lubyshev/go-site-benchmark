@@ -12,6 +12,8 @@ import (
 
 type AppConfig struct {
 	ServerPort              int
+	CacheBgFrequency        time.Duration
+	CacheDebug              bool
 	CacheTtl                time.Duration
 	OverloadWorkers         int
 	OverloadInitConnections int
@@ -19,13 +21,25 @@ type AppConfig struct {
 	OverloadMaxConnections  int
 }
 
+type TestConfig struct {
+	CacheBgFrequency time.Duration
+}
+
 var config *AppConfig
+var testConfig *TestConfig
 
 func GetConfig() *AppConfig {
 	if config == nil {
 		loadConfig()
 	}
 	return config
+}
+
+func GetTestConfig() *TestConfig {
+	if testConfig == nil {
+		loadTestConfig()
+	}
+	return testConfig
 }
 
 func loadConfig() {
@@ -36,9 +50,20 @@ func loadConfig() {
 		log.Fatal(fmt.Sprintf("can`t get working directory: %s", err.Error()))
 	}
 
+	fileExists := false
 	myEnv := make(map[string]string)
 	fileName := fmt.Sprintf("%s/etc/.env", rootPath)
 	if _, err = os.Stat(fileName); os.IsNotExist(err) {
+		// for tests && benchmarks
+		fileName = fmt.Sprintf("%s/../etc/.env", rootPath)
+		if _, err = os.Stat(fileName); err == nil {
+			fileExists = true
+		}
+	} else {
+		fileExists = true
+	}
+	if !fileExists {
+		log.Printf("%s not found: load config from env", fileName)
 		getEnv := func(key string) string {
 			val, ok := os.LookupEnv(key)
 			if !ok {
@@ -48,6 +73,8 @@ func loadConfig() {
 			}
 		}
 		myEnv["APP_SERVER_PORT"] = getEnv("APP_SERVER_PORT")
+		myEnv["APP_CACHE_BACKGROUND_FREQUENCY"] = getEnv("APP_CACHE_BACKGROUND_FREQUENCY")
+		myEnv["APP_CACHE_DEBUG"] = getEnv("APP_CACHE_DEBUG")
 		myEnv["APP_CACHE_TTL"] = getEnv("APP_CACHE_TTL")
 		myEnv["APP_OVERLOAD_QUEUE_WORKERS"] = getEnv("APP_OVERLOAD_QUEUE_WORKERS")
 		myEnv["APP_OVERLOAD_QUEUE_WORKERS"] = getEnv("APP_OVERLOAD_QUEUE_WORKERS")
@@ -66,12 +93,54 @@ func loadConfig() {
 	}
 }
 
+func loadTestConfig() {
+	testConfig = new(TestConfig)
+
+	rootPath, err := os.Getwd()
+	if err != nil {
+		log.Fatal(fmt.Sprintf("can`t get working directory: %s", err.Error()))
+	}
+
+	myEnv := make(map[string]string)
+	fileName := fmt.Sprintf("%s/../etc/.test.env", rootPath)
+	if _, err = os.Stat(fileName); os.IsNotExist(err) {
+		log.Printf("%s not found: load config from env", fileName)
+		getEnv := func(key string) string {
+			val, ok := os.LookupEnv(key)
+			if !ok {
+				return ""
+			} else {
+				return val
+			}
+		}
+		myEnv["TEST_CACHE_BACKGROUND_FREQUENCY"] = getEnv("TEST_CACHE_BACKGROUND_FREQUENCY")
+	} else {
+		myEnv, err = godotenv.Read(fileName)
+		if err != nil {
+			log.Fatal(fmt.Sprintf("error while read config file: %s", fileName))
+		}
+	}
+
+	err = processTestEnv(myEnv)
+	if err != nil {
+		log.Fatal(fmt.Sprintf("error while processing config file: %s", err.Error()))
+	}
+}
+
 func processEnv(env map[string]string) error {
 	port, err := strconv.Atoi(env["APP_SERVER_PORT"])
 	if err != nil {
 		return err
 	}
 	config.ServerPort = port
+
+	freq, err := strconv.Atoi(env["APP_CACHE_BACKGROUND_FREQUENCY"])
+	if err != nil {
+		return err
+	}
+	config.CacheBgFrequency = time.Duration(freq * 1_000_000_000)
+
+	config.CacheDebug = "yes" == env["APP_CACHE_DEBUG"]
 
 	ttl, err := strconv.Atoi(env["APP_CACHE_TTL"])
 	if err != nil {
@@ -103,5 +172,13 @@ func processEnv(env map[string]string) error {
 	}
 	config.OverloadMaxConnections = maxCons
 
+	return nil
+}
+func processTestEnv(env map[string]string) error {
+	freq, err := strconv.Atoi(env["TEST_CACHE_BACKGROUND_FREQUENCY"])
+	if err != nil {
+		return err
+	}
+	testConfig.CacheBgFrequency = time.Duration(freq * 1_000_000_000)
 	return nil
 }

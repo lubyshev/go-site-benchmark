@@ -6,3 +6,7 @@ logs:
 	docker logs site_benchmark
 stop:
 	docker stop site_benchmark
+test:
+	cd ./tests;	go test -v -p 1 .
+benchmark:
+	cd ./benchmarks; go test -bench . -parallel 100 -count 10
