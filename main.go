@@ -44,13 +44,18 @@ func main() {
 		config.OverloadInitConnections,
 		config.OverloadMaxLimit,
 		config.OverloadMaxConnections,
+		config.OverloadMethod,
 	)
 	if err != nil {
 		log.Fatalf("ERROR: %s\n", err.Error())
 	}
 
 	ctxCache, ctxCacheCancelFunc := context.WithCancel(context.Background())
-	err = cache.GetCache().StartBackground(ctxCache, config.CacheBgFrequency, config.CacheDebug)
+	err = cache.GetCache().StartBackground(
+		ctxCache,
+		config.CacheBgFrequency,
+		config.CacheDebug,
+	)
 	if err != nil {
 		log.Fatalf("ERROR: %s\n", err.Error())
 	}
@@ -78,10 +83,10 @@ func main() {
 		done <- true
 	}()
 
+	log.Println("Stop background ...")
 	<-done
 	overload.StopBackground()
 	ctxCacheCancelFunc()
 	_ = server.Close()
-	time.Sleep(1 * time.Second)
-	log.Println("Stop background ...")
+	time.Sleep(3 * time.Second)
 }

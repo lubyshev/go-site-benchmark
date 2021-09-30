@@ -16,13 +16,17 @@ var queries = [...]string{
 	"купить playstation",
 	"купить xbox",
 	"купить ириску",
+	"reno logan",
+	"audi a4",
+	"toyota rav4",
+	"dark souls 3",
 }
 
 func BenchmarkHiLoad(b *testing.B) {
 	u := fmt.Sprintf(
 		"http://localhost:%d/sites?search=%s",
 		conf.GetConfig().ServerPort,
-		url.QueryEscape(queries[rand.Intn(4)]),
+		url.QueryEscape(queries[rand.Intn(len(queries))]),
 	)
 	log.Printf("load url: %s", u)
 	resp, err := http.Get(u)

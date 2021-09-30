@@ -16,23 +16,24 @@ type OverloadTest interface {
 		initConnectionsCount int,
 		maxLimit int,
 		maxConnections int,
+		method string,
 	) error
 	StopBackground()
 }
 
 const (
-	stateUrlInProgress = "in-progress"
+	stateUrlInProgress = "in progress"
 	stateUrlReady      = "ready"
 	stateUrlFailed     = "failed"
 )
 
 type Url struct {
-	Url          string
-	Count        int
-	state        string
-	ttl          time.Duration
-	currentCount int
-	errors       int
+	Url      string
+	Count    int
+	state    string
+	ttl      time.Duration
+	attempts int
+	errors   int
 }
 
 type Host struct {

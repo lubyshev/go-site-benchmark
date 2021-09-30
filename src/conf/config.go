@@ -1,6 +1,7 @@
 package conf
 
 import (
+	"errors"
 	"fmt"
 	"github.com/joho/godotenv"
 	_ "github.com/joho/godotenv/autoload"
@@ -8,6 +9,11 @@ import (
 	"os"
 	"strconv"
 	"time"
+)
+
+const (
+	OverloadMethodSimple = "simple"
+	OverloadMethodStrong = "strong"
 )
 
 type AppConfig struct {
@@ -19,6 +25,7 @@ type AppConfig struct {
 	OverloadInitConnections int
 	OverloadMaxLimit        int
 	OverloadMaxConnections  int
+	OverloadMethod          string
 }
 
 type TestConfig struct {
@@ -80,6 +87,7 @@ func loadConfig() {
 		myEnv["APP_OVERLOAD_QUEUE_WORKERS"] = getEnv("APP_OVERLOAD_QUEUE_WORKERS")
 		myEnv["APP_OVERLOAD_MAX_LIMIT"] = getEnv("APP_OVERLOAD_MAX_LIMIT")
 		myEnv["APP_OVERLOAD_MAX_CONNECTIONS"] = getEnv("APP_OVERLOAD_MAX_CONNECTIONS")
+		myEnv["APP_OVERLOAD_METHOD"] = getEnv("APP_OVERLOAD_METHOD")
 	} else {
 		myEnv, err = godotenv.Read(fileName)
 		if err != nil {
@@ -172,8 +180,18 @@ func processEnv(env map[string]string) error {
 	}
 	config.OverloadMaxConnections = maxCons
 
+	switch env["APP_OVERLOAD_METHOD"] {
+	case OverloadMethodSimple:
+		config.OverloadMethod = OverloadMethodSimple
+	case OverloadMethodStrong:
+		config.OverloadMethod = OverloadMethodStrong
+	default:
+		return errors.New("invalid overload method")
+	}
+
 	return nil
 }
+
 func processTestEnv(env map[string]string) error {
 	freq, err := strconv.Atoi(env["TEST_CACHE_BACKGROUND_FREQUENCY"])
 	if err != nil {

@@ -2,7 +2,9 @@ package benchmark
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"log"
 	"lubyshev/go-site-benchmark/src/cache"
@@ -16,6 +18,11 @@ import (
 const (
 	stateQueueStarted = "started"
 	stateQueueStopped = "stopped"
+)
+
+const (
+	methodSimple = "simple"
+	methodStrong = "strong"
 )
 
 var (
@@ -33,17 +40,33 @@ type overloadQueue struct {
 	initConnectionsCount int
 	maxLimit             int
 	maxConnections       int
+	method               string
 }
 
-func (q *overloadQueue) start(count int, connectionsCount int, limit int, connections int) error {
+func (q *overloadQueue) start(
+	count int,
+	connectionsCount int,
+	limit int,
+	connections int,
+	method string,
+) error {
 	if q.state == stateQueueStarted {
 		return ErrAlreadyStarted
+	}
+	switch method {
+	case methodSimple:
+		q.method = methodSimple
+	case methodStrong:
+		q.method = methodStrong
+	default:
+		return fmt.Errorf("invalid overload metod: %s", method)
 	}
 	q.state = stateQueueStarted
 	q.workersCount = count
 	q.initConnectionsCount = connectionsCount
 	q.maxLimit = limit
 	q.maxConnections = connections
+
 	q.ctx, q.cancel = context.WithCancel(context.Background())
 
 	go q._pusher(q.ctx)
@@ -88,68 +111,65 @@ func (q *overloadQueue) worker(
 	}
 }
 
-var connectionCount int32
+var (
+	connectionCount      int
+	connectionCountMutex sync.Mutex
+)
+
+func (q *overloadQueue) allocateConnections(count int) bool {
+	defer connectionCountMutex.Unlock()
+	connectionCountMutex.Lock()
+	if q.maxConnections-connectionCount < count {
+		return false
+	}
+	connectionCount += count
+	return true
+}
+
+func (q *overloadQueue) releaseConnections(count int) bool {
+	defer connectionCountMutex.Unlock()
+	connectionCountMutex.Lock()
+	connectionCount -= count
+	return true
+}
 
 func (q *overloadQueue) testUrl(_ int, url *Url) {
 	if url.state != stateUrlInProgress {
 		return
 	}
 	if url.errors >= 0 {
-		if url.Count == 0 && url.currentCount == 0 {
-			url.currentCount = q.initConnectionsCount
-		} else {
-			if url.errors > 0 {
-				url.Count = url.currentCount - url.errors
-				if url.Count < 0 {
-					url.Count = 0
-				}
-				url.state = stateUrlReady
-			} else {
-				url.Count = url.currentCount
-				url.currentCount *= 2
-				if url.Count >= q.maxLimit {
-					url.state = stateUrlReady
-				}
-				if url.currentCount > q.maxConnections {
-					url.currentCount = q.maxConnections
-				}
-			}
-
-			if url.state == stateUrlReady {
-				cache.GetCache().Set(url.Url, url, url.ttl)
-				log.Printf("url tested: %s", url.Url)
-				return
-			}
-			url.errors = -1
+		url.state, url.Count, url.attempts = q.nextStep(url)
+		if url.state != stateUrlInProgress {
+			cache.GetCache().Set(url.Url, url, url.ttl)
+			log.Printf("url tested: %s", url.Url)
+			return
 		}
+		url.errors = -1
 	}
 
 	errorsCount := int32(0)
-	if int(connectionCount) < (q.maxConnections - url.currentCount) {
+	if q.allocateConnections(url.attempts) {
 		wg := sync.WaitGroup{}
-		for i := 0; i < url.currentCount; i++ {
+		for i := 0; i < url.attempts; i++ {
 			wg.Add(1)
 			go q.loadUrl(url.Url, &errorsCount, &wg)
 		}
 		wg.Wait()
+		q.releaseConnections(url.attempts)
 	} else {
 		q.pushForced(url)
 		return
 	}
-
-	log.Printf("%s tested on %d connections and has %d errors",
+	log.Printf(
+		"%s tested on %d connections and has %d errors",
 		url.Url,
-		url.currentCount,
+		url.attempts,
 		errorsCount,
 	)
-
-	if int(errorsCount) == url.currentCount {
-		url.Count = 0
-		url.state = stateUrlFailed
-	}
 	url.errors = int(errorsCount)
+
 	cache.GetCache().Set(url.Url, url, url.ttl)
-	time.Sleep(200 * time.Millisecond)
+	time.Sleep(20 * time.Millisecond)
 	if url.state == stateUrlInProgress {
 		q.pushForced(url)
 	}
@@ -172,23 +192,27 @@ func (q *overloadQueue) pushForced(url *Url) {
 
 func (q *overloadQueue) loadUrl(url string, errorsCount *int32, wg *sync.WaitGroup) {
 	defer func() {
-		atomic.AddInt32(&connectionCount, -1)
 		wg.Done()
 	}()
-	atomic.AddInt32(&connectionCount, 1)
-
-	var dialer = &net.Dialer{
-		Timeout:  3 * time.Second,
-		Deadline: time.Now().Add(4 * time.Second),
-	}
-	client := http.Client{Transport: &http.Transport{
-		DialContext:         dialer.DialContext,
-		TLSHandshakeTimeout: 2 * time.Second,
-		MaxConnsPerHost:     q.maxConnections * 2,
-		MaxIdleConns:        q.maxConnections * 4,
-	}}
+	client := &http.Client{
+		Transport: &http.Transport{
+			DialContext: (&net.Dialer{
+				Timeout:   5 * time.Second,
+				Deadline:  time.Now().Add(4 * time.Second),
+				KeepAlive: -1,
+			}).DialContext,
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: true,
+			},
+			TLSHandshakeTimeout: 3 * time.Second,
+		}}
+	defer func() {
+		client.CloseIdleConnections()
+		client = nil
+	}()
 	resp, err := client.Get(url)
 	if err != nil {
+		log.Printf("ERROR: %s %s", err.Error(), url)
 		atomic.AddInt32(errorsCount, 1)
 		return
 	}
@@ -196,10 +220,12 @@ func (q *overloadQueue) loadUrl(url string, errorsCount *int32, wg *sync.WaitGro
 		_ = resp.Body.Close()
 	}()
 	if resp.StatusCode != http.StatusOK {
+		// log.Printf("ERROR: http status %d %s", resp.StatusCode, url)
 		atomic.AddInt32(errorsCount, 1)
 	} else {
 		_, err = ioutil.ReadAll(resp.Body)
 		if err != nil {
+			log.Printf("ERROR: %s %s", err.Error(), url)
 			atomic.AddInt32(errorsCount, 1)
 		}
 	}
@@ -244,6 +270,55 @@ func (q *overloadQueue) getUrl(url string) (*Url, error) {
 	}, nil
 }
 
+func (q *overloadQueue) nextStep(url *Url) (nextState string, nextCount int, nextAttempts int) {
+	switch q.method {
+	case methodSimple:
+		return q.nextStepSimple(url.Count, url.attempts, url.errors)
+	case methodStrong:
+		return q.nextStepStrong(url.Count, url.attempts, url.errors)
+	}
+	return
+}
+
+func (q *overloadQueue) nextStepSimple(count int, attempts int, errs int) (nextState string, nextCount int, nextAttempts int) {
+	nextAttempts = 0
+	nextState = stateUrlInProgress
+	if count == 0 && attempts == 0 {
+		nextAttempts = q.initConnectionsCount
+	} else {
+		if errs == attempts {
+			if count != q.initConnectionsCount {
+				nextState, nextCount, nextAttempts = stateUrlReady, count, 0
+			} else {
+				nextState, nextCount, nextAttempts = stateUrlFailed, 0, 0
+			}
+			return
+		}
+		if errs > 0 {
+			nextCount = attempts - errs
+			if count < 0 {
+				nextCount = 0
+			}
+			nextState = stateUrlReady
+		} else {
+			nextCount = attempts
+			nextAttempts = attempts * 2
+			if nextCount >= q.maxLimit {
+				nextState = stateUrlReady
+			}
+			if attempts > q.maxConnections {
+				nextAttempts = q.maxConnections
+			}
+		}
+	}
+
+	return
+}
+
+func (q *overloadQueue) nextStepStrong(count int, attempts int, errs int) (nextState string, nextCount int, nextAttempts int) {
+	return
+}
+
 var overloadBg *overloadQueue
 var overloadBgOnce sync.Once
 
@@ -252,8 +327,15 @@ func (o overload) StartBackground(
 	initConnectionsCount int,
 	maxLimit int,
 	maxConnections int,
+	method string,
 ) error {
-	return getQueue().start(workersCount, initConnectionsCount, maxLimit, maxConnections)
+	return getQueue().start(
+		workersCount,
+		initConnectionsCount,
+		maxLimit,
+		maxConnections,
+		method,
+	)
 }
 
 func (o overload) StopBackground() {
