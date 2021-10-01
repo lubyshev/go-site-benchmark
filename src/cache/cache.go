@@ -3,11 +3,7 @@ package cache
 import (
 	"context"
 	"errors"
-	"fmt"
-	"io"
 	"log"
-	"os"
-	"runtime/pprof"
 	"sync"
 	"time"
 )
@@ -16,7 +12,6 @@ var (
 	ErrNotExists          = errors.New("cache value does not exists")
 	ErrExpired            = errors.New("cache value has been expired")
 	ErrBgAlreadyStarted   = errors.New("cache background already started")
-	ErrDataFolderNotFound = errors.New("data folder not found")
 )
 
 var itemsPool = sync.Pool{
@@ -126,45 +121,7 @@ func (c *Cache) StartBackground(ctx context.Context, frequency time.Duration, de
 	return nil
 }
 
-func getDataFolder() string {
-	rootPath, err := os.Getwd()
-	if err != nil {
-		return ""
-	}
-
-	fileExists := false
-	fileName := fmt.Sprintf("%s/data", rootPath)
-	if _, err = os.Stat(fileName); os.IsNotExist(err) {
-		// for tests && benchmarks
-		fileName = fmt.Sprintf("%s/../data", rootPath)
-		if _, err = os.Stat(fileName); err == nil {
-			fileExists = true
-		}
-	} else {
-		fileExists = true
-	}
-	if !fileExists {
-		fileName = ""
-	}
-
-	return fileName
-}
-
-func getWriter(fileName string) (io.Writer, error) {
-	folder := getDataFolder()
-	if folder == "" {
-		return nil, ErrDataFolderNotFound
-	}
-
-	f, err := os.Create(folder + "/" + fileName)
-	if err != nil {
-		return nil, err
-	}
-
-	return f, nil
-}
-
-func (c *Cache) _garbageCollector(ctx context.Context, frequency time.Duration, debug bool) {
+func (c *Cache) _garbageCollector(ctx context.Context, frequency time.Duration, _ bool) {
 	for {
 		select {
 		case <-time.After(frequency):
@@ -180,34 +137,12 @@ func (c *Cache) _garbageCollector(ctx context.Context, frequency time.Duration, 
 				}
 			}
 			c.mx.Unlock()
-
 			log.Printf("garbage collector: %d items overall, %d items deleted", len(c.items), counter)
-			if debug {
-				saveDebugInfo()
-			}
+
 		case <-ctx.Done():
 			log.Printf("cache background stopped")
 			c.started = false
 			return
-		}
-	}
-}
-
-func saveDebugInfo() {
-	writer, err := getWriter("heap.out")
-	if err != nil {
-		log.Printf("DEBUG: cant get writer: %s", err.Error())
-	}
-	if err == nil && writer != nil {
-		err = pprof.Lookup("heap").WriteTo(writer, 0)
-		if err != nil {
-			log.Printf("DEBUG: error write to heap.out")
-		}
-		err = writer.(*os.File).Close()
-		if err != nil {
-			log.Printf("DEBUG: can`t close heap.out: %s", err.Error())
-		} else {
-			log.Printf("DEBUG: heap.out saved")
 		}
 	}
 }

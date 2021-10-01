@@ -316,7 +316,23 @@ func (q *overloadQueue) nextStepSimple(count int, attempts int, errs int) (nextS
 }
 
 func (q *overloadQueue) nextStepStrong(count int, attempts int, errs int) (nextState string, nextCount int, nextAttempts int) {
-	return
+	if count == 0 && attempts == 0 {
+		return stateUrlInProgress, q.initConnectionsCount, q.initConnectionsCount * 2
+	}
+	if errs == 0 {
+		return stateUrlInProgress, attempts, int(float32(attempts) * 1.5)
+	}
+	if errs > count {
+		nextAttempts = attempts*3/4 - 1
+		if count > nextAttempts {
+			count = nextAttempts
+		}
+		if count <= 0 {
+			return stateUrlFailed, 0, 0
+		}
+		return stateUrlInProgress, count, nextAttempts
+	}
+	return stateUrlReady, attempts - errs, 0
 }
 
 var overloadBg *overloadQueue

@@ -10,7 +10,7 @@ import (
 )
 
 type OverloadTest interface {
-	Benchmark(sites *dataProvider.HostsToCheck, ttl time.Duration) (*OverloadTestResult, error)
+	Benchmark(sites *dataProvider.HostsToCheck, ttl time.Duration) (map[string]int, error)
 	StartBackground(
 		workersCount int,
 		initConnectionsCount int,
@@ -90,7 +90,7 @@ var overloadManager overload
 func (o overload) Benchmark(
 	sites *dataProvider.HostsToCheck,
 	ttl time.Duration,
-) (*OverloadTestResult, error) {
+) (res map[string]int, err error) {
 	result := new(OverloadTestResult)
 	result.Items = make(map[string]*Host)
 
@@ -105,8 +105,15 @@ func (o overload) Benchmark(
 		}
 	}
 	wg.Wait()
+	res = make(map[string]int)
+	for hostName, host := range result.Items {
+		for _, url := range host.Urls {
+			res[hostName] += url.Count
+		}
+		res[hostName] /= len(host.Urls)
+	}
 
-	return result, nil
+	return
 }
 
 func (o *overload) testSite(

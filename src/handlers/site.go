@@ -48,18 +48,14 @@ func Site(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	keys := make([]string, 0, len(result.Items))
-	for k := range result.Items {
+	keys := make([]string, 0, len(result))
+	for k, _ := range result {
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
 
 	for _, hostName := range keys {
-		count := 0
-		for _, url := range result.Items[hostName].Urls {
-			count += url.Count
-		}
-		_, _ = fmt.Fprintf(w, "%3d: %s\n", count, hostName)
+		_, _ = fmt.Fprintf(w, "%3d: %s\n", result[hostName], hostName)
 	}
 	log.Printf("FINISH REQUEST FROM: %s\n===\n", req.RemoteAddr)
 }

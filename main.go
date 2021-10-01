@@ -9,15 +9,12 @@ import (
 	"lubyshev/go-site-benchmark/src/conf"
 	"lubyshev/go-site-benchmark/src/handlers"
 	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 )
-
-func sites(w http.ResponseWriter, req *http.Request) {
-	handlers.Site(w, req)
-}
 
 var pid int
 
@@ -66,7 +63,7 @@ func main() {
 	done := make(chan bool, 1)
 
 	server := &http.Server{Addr: fmt.Sprintf(":%d", config.ServerPort)}
-	http.HandleFunc("/sites", sites)
+	http.HandleFunc("/sites", handlers.Site)
 	go func() {
 		err = server.ListenAndServe()
 		if err != nil {
