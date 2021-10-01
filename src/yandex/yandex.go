@@ -6,11 +6,9 @@ import (
 	"fmt"
 	"github.com/PuerkitoBio/goquery"
 	"io/ioutil"
-	"lubyshev/go-site-benchmark/src/cache"
 	"net/http"
 	"net/url"
 	"strings"
-	"time"
 )
 
 const searchYandexTemplate = "https://yandex.ru/search/touch/?service=www.yandex&ui=webmobileapp.yandex&numdoc=50&lr=213&p=0&text=%s"
@@ -25,11 +23,6 @@ type ResponseItem struct {
 }
 
 func GetYandexSearchResult(searchPhrase string) (res *ResponseStruct, err error) {
-	iRes, err := cache.GetCache().Get("yandex::" + searchPhrase)
-	if err == nil {
-		res = iRes.(*ResponseStruct)
-		return
-	}
 	resp, err := http.Get(fmt.Sprintf(searchYandexTemplate, url.QueryEscape(searchPhrase)))
 	if err != nil {
 		return nil, err
@@ -41,11 +34,7 @@ func GetYandexSearchResult(searchPhrase string) (res *ResponseStruct, err error)
 	if err != nil {
 		return nil, err
 	}
-	res, err = parseYandexResponse(response)
-	if err == nil {
-		cache.GetCache().Set("yandex::"+searchPhrase, res, 600*time.Second)
-	}
-	return
+	return parseYandexResponse(response)
 }
 
 func parseYandexResponse(response []byte) (sites *ResponseStruct, err error) {

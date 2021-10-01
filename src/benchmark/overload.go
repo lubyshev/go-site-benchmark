@@ -107,10 +107,13 @@ func (o overload) Benchmark(
 	wg.Wait()
 	res = make(map[string]int)
 	for hostName, host := range result.Items {
-		for _, url := range host.Urls {
-			res[hostName] += url.Count
+		res[hostName] = 0
+		if l := len(host.Urls); l > 0 {
+			for _, url := range host.Urls {
+				res[hostName] += url.Count
+			}
+			res[hostName] /= l
 		}
-		res[hostName] /= len(host.Urls)
 	}
 
 	return

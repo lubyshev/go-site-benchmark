@@ -1,15 +1,13 @@
 package benchmark
 
 import (
+	"bytes"
 	"context"
-	"crypto/tls"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"github.com/valyala/fasthttp"
 	"log"
 	"lubyshev/go-site-benchmark/src/cache"
-	"net"
-	"net/http"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -141,7 +139,12 @@ func (q *overloadQueue) testUrl(_ int, url *Url) {
 		url.state, url.Count, url.attempts = q.nextStep(url)
 		if url.state != stateUrlInProgress {
 			cache.GetCache().Set(url.Url, url, url.ttl)
-			log.Printf("url tested: %s", url.Url)
+			log.Printf(
+				"%s tested on %d connections and has %d errors",
+				url.Url,
+				url.Count,
+				url.errors,
+			)
 			return
 		}
 		url.errors = -1
@@ -160,12 +163,6 @@ func (q *overloadQueue) testUrl(_ int, url *Url) {
 		q.pushForced(url)
 		return
 	}
-	log.Printf(
-		"%s tested on %d connections and has %d errors",
-		url.Url,
-		url.attempts,
-		errorsCount,
-	)
 	url.errors = int(errorsCount)
 
 	cache.GetCache().Set(url.Url, url, url.ttl)
@@ -194,39 +191,36 @@ func (q *overloadQueue) loadUrl(url string, errorsCount *int32, wg *sync.WaitGro
 	defer func() {
 		wg.Done()
 	}()
-	client := &http.Client{
-		Transport: &http.Transport{
-			DialContext: (&net.Dialer{
-				Timeout:   5 * time.Second,
-				Deadline:  time.Now().Add(4 * time.Second),
-				KeepAlive: -1,
-			}).DialContext,
-			TLSClientConfig: &tls.Config{
-				InsecureSkipVerify: true,
-			},
-			TLSHandshakeTimeout: 3 * time.Second,
-		}}
+
+	req := fasthttp.AcquireRequest()
+	req.SetConnectionClose()
 	defer func() {
-		client.CloseIdleConnections()
-		client = nil
+		fasthttp.ReleaseRequest(req)
 	}()
-	resp, err := client.Get(url)
+	req.SetRequestURI(url)
+	resp := fasthttp.AcquireResponse()
+
+	defer fasthttp.ReleaseResponse(resp)
+
+	err := (&fasthttp.Client{
+		ReadBufferSize: 1 << 20,
+		ReadTimeout:    15 * time.Second,
+	}).Do(req, resp)
 	if err != nil {
-		log.Printf("ERROR: %s %s", err.Error(), url)
-		atomic.AddInt32(errorsCount, 1)
+		fmt.Printf("ERROR: %s: %s\n", url, err)
 		return
 	}
-	defer func() {
-		_ = resp.Body.Close()
-	}()
-	if resp.StatusCode != http.StatusOK {
+
+	if resp.StatusCode() != fasthttp.StatusOK {
 		// log.Printf("ERROR: http status %d %s", resp.StatusCode, url)
 		atomic.AddInt32(errorsCount, 1)
 	} else {
-		_, err = ioutil.ReadAll(resp.Body)
-		if err != nil {
-			log.Printf("ERROR: %s %s", err.Error(), url)
-			atomic.AddInt32(errorsCount, 1)
+		contentEncoding := resp.Header.Peek("Content-Encoding")
+		if bytes.EqualFold(contentEncoding, []byte("gzip")) {
+			fmt.Println("Unzipping...")
+			_, _ = resp.BodyGunzip()
+		} else {
+			_ = resp.Body()
 		}
 	}
 }
